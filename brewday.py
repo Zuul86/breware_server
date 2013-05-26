@@ -32,7 +32,6 @@ class Application(tornado.web.Application):
             (r"/", MainHandler),
             (r"/on", OnHandler),
             (r"/off", OffHandler),
-            (r"/demoflot", DemoFlotHandler),
             (r"/temperaturesocket", TemperatureSocketHandler)
         ]
         settings = dict(
@@ -78,9 +77,7 @@ class TemperatureSocketHandler(tornado.websocket.WebSocketHandler):
     def on_close(self):
         print('Closing Socket')
         with self.lock:
-            print('Lock')
-            TemperatureSocketHandler.waiters.remove(self)
-        print('Unlock')    
+            TemperatureSocketHandler.waiters.remove(self)  
 
         if len(TemperatureSocketHandler.waiters) == 0:
             print('No more clients. Stop Thread.')
@@ -91,7 +88,7 @@ class TemperatureSocketHandler(tornado.websocket.WebSocketHandler):
     def send_temperatures(cls):
         for waiter in cls.waiters:
             try:
-                temp = read_temp()
+                temp = TemperatureReader().read_temp()
                 if temp >= 80:
                     GPIO.output(18, True)
                 if len(cls.waiters) == 0:
@@ -123,23 +120,39 @@ def main():
     http_server.listen(options.port)
     tornado.ioloop.IOLoop.instance().start()
 
-def read_temp_raw():
-    f = open(device_file, 'r')
-    lines = f.readlines()
-    f.close()
-    return lines
+class TemperatureReader:
+    def read_temp_raw(self):
+        f = open(device_file, 'r')
+        lines = f.readlines()
+        f.close()
+        return lines
 
-def read_temp():
-    lines = read_temp_raw()
-    while lines[0].strip()[-3:] != 'YES':
-        time.sleep(0.2)
-        lines = read_temp_raw()
-    equals_pos = lines[1].find('t=')
-    if equals_pos != -1:
-        temp_string = lines[1][equals_pos+2:]
-        temp_c = float(temp_string) / 1000.0
-        temp_f = temp_c * 9.0 / 5.0 +32.0
-    return temp_f
+    def read_temp(self):
+        lines = self.read_temp_raw()
+        while self.tempDataContainsYes(lines):
+            time.sleep(0.2)
+            lines = self.read_temp_raw()
+        temp_string = self.getTemperatureData(lines)
+        if temp_string != '':
+            temp_c = self.calculateCelcius(temp_string)
+            temp_f = self.calculateFareheit(temp_c)
+        return temp_f
+
+    def getTemperatureData(self, tempDataString):
+        equals_pos = tempDataString[1].find('t=')
+        temp_string = '';
+        if equals_pos != -1:
+            temp_string = tempDataString[1][equals_pos+2:]
+        return temp_string
+    
+    def tempDataContainsYes(self, tempDataString):
+        return tempDataString[0].strip()[-3:] != 'YES'
+    
+    def calculateCelcius(self, tempString):
+        return float(tempString) / 1000.0
+
+    def calculateFareheit(self, tempCelcius):
+        return tempCelcius * 9.0 / 5.0 +32.0
 
 if __name__ == "__main__":
     main()
