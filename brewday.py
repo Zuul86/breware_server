@@ -8,7 +8,7 @@ import sys
 import RPi.GPIO as GPIO
 import os
 import glob
-import time
+from RepeatEvery import RepeatEvery
 
 from tornado.options import define, options
 import threading
@@ -21,7 +21,7 @@ os.system('modprobe w1-gpio')
 os.system('modprobe w1-therm')
 
 GPIO.setmode(GPIO.BCM)
-GPIO.setup(18, GPIO.OUT)
+GPIO.setup(23, GPIO.OUT)
 
 device_folder = glob.glob(base_dir + '28*')[0]
 device_file = device_folder + '/w1_slave'
@@ -37,8 +37,8 @@ class Application(tornado.web.Application):
         settings = dict(
                 template_path = os.path.join(os.path.dirname(__file__), "templates"),
                 static_path = os.path.join(os.path.dirname(__file__), "static"),
-                #xsrf_cookies=True,
-                #cookie_secret="3wRI6Q7Nm50z",
+                xsrf_cookies=True,
+                cookie_secret="3wRI6Q7Nm50z",
         )
         tornado.web.Application.__init__(self, handlers, **settings)
 
@@ -48,19 +48,17 @@ class MainHandler(tornado.web.RequestHandler):
      
 class OnHandler(tornado.web.RequestHandler):
     def get(self):
-        GPIO.output(18, True)
-        temp = read_temp()
-        self.write(str(temp))
+        GPIO.output(23, True)
+        self.write("On")
 
 class OffHandler(tornado.web.RequestHandler):
     def get(self):
+        GPIO.output(23, False)
         self.write("Off")
-        GPIO.output(18, False)
 
 class TemperatureSocketHandler(tornado.websocket.WebSocketHandler):
     waiters = set()
     thread = set()
-    lock = threading.Lock()
     
     def __init__(self, application, request, **kwargs):        
         self.thread = RepeatEvery(1, self.send_temperatures)
@@ -71,18 +69,14 @@ class TemperatureSocketHandler(tornado.websocket.WebSocketHandler):
             self.thread.start()
         
     def open(self):
-        with self.lock:
-            TemperatureSocketHandler.waiters.add(self)
+        TemperatureSocketHandler.waiters.add(self)
 
     def on_close(self):
-        print('Closing Socket')
-        with self.lock:
-            TemperatureSocketHandler.waiters.remove(self)  
-
+        TemperatureSocketHandler.waiters.remove(self)  
+        print('Connection Closed')
         if len(TemperatureSocketHandler.waiters) == 0:
             print('No more clients. Stop Thread.')
             self.thread.stop()
-            self.thread.join(5)
         
     @classmethod
     def send_temperatures(cls):
@@ -90,7 +84,9 @@ class TemperatureSocketHandler(tornado.websocket.WebSocketHandler):
             try:
                 temp = TemperatureReader().read_temp()
                 if temp >= 80:
-                    GPIO.output(18, True)
+                    GPIO.output(23, True)
+                if temp < 80:
+                    GPIO.output(23, False)
                 if len(cls.waiters) == 0:
                     break
                 waiter.write_message(str(temp))
@@ -98,20 +94,7 @@ class TemperatureSocketHandler(tornado.websocket.WebSocketHandler):
                 print("Error sending temp", e)
                 break
 
-class RepeatEvery(threading.Thread):
-    def __init__(self, interval, func, *args, **kwargs):
-        threading.Thread.__init__(self)
-        self.interval = interval  # seconds between calls
-        self.func = func          # function to call
-        self.args = args          # optional positional argument(s) for call
-        self.kwargs = kwargs      # optional keyword argument(s) for call
-        self.runable = True
-    def run(self):
-        while self.runable:
-            self.func(*self.args, **self.kwargs)
-            time.sleep(self.interval)
-    def stop(self):
-        self.runable = False
+
         
 def main():
     tornado.options.parse_command_line()
