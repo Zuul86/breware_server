@@ -1,9 +1,17 @@
 import os
 import glob
 
-class TemperatureReader:
+class TemperatureReader():
+    base_dir = '/sys/bus/w1/devices/'
+
+    os.system('modprobe w1-gpio')
+    os.system('modprobe w1-therm')
+
+    device_folder = glob.glob(base_dir + '28*')[0]
+    device_file = device_folder + '/w1_slave'
+
     def read_temp_raw(self):
-        f = open(device_file, 'r')
+        f = open(self.device_file, 'r')
         lines = f.readlines()
         f.close()
         return lines
