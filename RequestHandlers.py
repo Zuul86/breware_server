@@ -8,6 +8,7 @@ GPIO.setup(23, GPIO.OUT)
 
 from RepeatEvery import RepeatEvery
 from TemperatureReader import TemperatureReader
+from MessageFactory import MessageFactory
 
 class MainHandler(tornado.web.RequestHandler):
     def get(self):
@@ -24,38 +25,38 @@ class OffHandler(tornado.web.RequestHandler):
         self.write("Off")
 
 class TemperatureSocketHandler(tornado.websocket.WebSocketHandler):
-    waiters = set()
+    __waiters = set()
     thread = set()
+    stepTemperature = 0
     
     def __init__(self, application, request, **kwargs):        
         self.thread = RepeatEvery(1, self.__send_temperatures)
         tornado.websocket.WebSocketHandler.__init__(self, application, request, **kwargs)
         
     def on_message(self, message):
-        #TODO: Take JSON objects as messages.
-        #      Use a message factory to process different types of messages.
-        if message == 'GetTemps':
-            self.thread.start()
+        messageObject = MessageFactory.get_message(message)
+        messageObject.processMessage(self)
+        print(self.stepTemperature)
         
     def open(self):
-        TemperatureSocketHandler.waiters.add(self)
+        TemperatureSocketHandler.__waiters.add(self)
 
     def on_close(self):
-        TemperatureSocketHandler.waiters.remove(self)  
+        TemperatureSocketHandler.__waiters.remove(self)  
         print('Connection Closed')
-        if len(TemperatureSocketHandler.waiters) == 0:
+        if len(TemperatureSocketHandler.__waiters) == 0:
             print('No more clients. Stop Thread.')
             self.thread.stop()
         
     def __send_temperatures(self):
-        for waiter in self.waiters:
+        for waiter in self.__waiters:
             try:
                 temp = TemperatureReader().read_temp()
-                if temp >= 80:
+                if temp >= stepTemperature:
                     GPIO.output(23, True)
-                if temp < 80:
+                if temp < stepTemperature:
                     GPIO.output(23, False)
-                if len(self.waiters) == 0:
+                if len(self.__waiters) == 0:
                     break
                 waiter.write_message(str(temp))
             except AttributeError, e:
