@@ -52,10 +52,10 @@ class TemperatureSocketHandler(tornado.websocket.WebSocketHandler):
         for waiter in self.__waiters:
             try:
                 temp = TemperatureReader().read_temp()
-                if temp >= stepTemperature:
-                    GPIO.output(23, True)
-                if temp < stepTemperature:
+                if temp >= self.stepTemperature:
                     GPIO.output(23, False)
+                if temp < self.stepTemperature:
+                    GPIO.output(23, True)
                 if len(self.__waiters) == 0:
                     break
                 waiter.write_message(str(temp))

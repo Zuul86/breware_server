@@ -36,7 +36,7 @@ class StopMessage(Message):
 class AddStepsMessage(Message):
     def processMessage(self, objectContext):
         print('processing add')
-        objectContext.stepTemperature = self.payload
+        objectContext.stepTemperature = self.payload['Temperature']
 
 class RemoveStepsMessage(Message):
     def processMessage(self, objectContext):
