@@ -28,6 +28,7 @@ class TemperatureSocketHandler(tornado.websocket.WebSocketHandler):
     __waiters = set()
     thread = set()
     stepTemperature = 0
+    temperatureControlOverriden = False
     
     def __init__(self, application, request, **kwargs):        
         self.thread = RepeatEvery(1, self.__send_temperatures)
@@ -36,7 +37,6 @@ class TemperatureSocketHandler(tornado.websocket.WebSocketHandler):
     def on_message(self, message):
         messageObject = MessageFactory.get_message(message)
         messageObject.processMessage(self)
-        print(self.stepTemperature)
         
     def open(self):
         TemperatureSocketHandler.__waiters.add(self)
@@ -53,12 +53,22 @@ class TemperatureSocketHandler(tornado.websocket.WebSocketHandler):
             try:
                 temp = TemperatureReader().read_temp()
                 if temp >= self.stepTemperature:
-                    GPIO.output(23, False)
+                    if not self.temperatureControlOverriden:
+                        self.toggleGPIO(False)
+                    waiter.write_message('off')
                 if temp < self.stepTemperature:
-                    GPIO.output(23, True)
+                    if not self.temperatureControlOverriden:
+                        self.toggleGPIO(True)
+                    waiter.write_message('on')
                 if len(self.__waiters) == 0:
                     break
                 waiter.write_message(str(temp))
-            except AttributeError, e:
+            except AttributeError as e:
                 print("Error sending temp", e)
                 break
+
+    def toggleGPIO(self, state):
+        if state == "false":
+            GPIO.output(23, False)
+        else:
+            GPIO.output(23, True)

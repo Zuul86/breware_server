@@ -15,6 +15,10 @@ class MessageFactory():
             return addStepsMessage
         elif messageObject['message'] == 'removeSteps':
             return RemoveStepsMessage()
+        elif messageObject['message'] == 'flame':
+            flameMessage = FlameMessage()
+            flameMessage.payload = messageObject['payload']
+            return flameMessage
 
 # Message Interface
 class Message(object):
@@ -42,4 +46,10 @@ class RemoveStepsMessage(Message):
     def processMessage(self, objectContext):
         print('processing remove')
 
+class FlameMessage(Message):
+    def processMessage(self, objectContext):
+        objectContext.temperatureControlOverriden = bool(self.payload)
+        objectContext.toggleGPIO(self.payload)
+
+        
 
