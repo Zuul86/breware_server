@@ -23,6 +23,7 @@ class MessageFactory():
 # Message Interface
 class Message(object):
     payload = ''
+    action = ''
     def processMessage(self, objectContext):
         pass
     
@@ -41,6 +42,8 @@ class AddStepsMessage(Message):
     def processMessage(self, objectContext):
         print('processing add')
         objectContext.stepTemperature = self.payload['Temperature']
+        objectContext.stepDuration = self.payload['Duration']
+        objectContext.action = 'addsteps'
 
 class RemoveStepsMessage(Message):
     def processMessage(self, objectContext):
@@ -49,7 +52,10 @@ class RemoveStepsMessage(Message):
 class FlameMessage(Message):
     def processMessage(self, objectContext):
         objectContext.temperatureControlOverriden = bool(self.payload)
-        objectContext.toggleGPIO(self.payload)
+        if (self.payload == "false"):
+            objectContext.toggleGPIO(False)
+        else:
+            objectContext.toggleGPIO(True)
 
         
 
